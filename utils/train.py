@@ -34,10 +34,10 @@ def val(packs, model):
             gts.append(gt)
 
         # 解码
-        out1, out2 = model(images)
+        out1 = model(images)
 
         # Loss 计算
-        predicts = out2[-1]
+        predicts = out1[-1]
 
         for predict_, gt_ in (zip(predicts, gts)):
             for k in range(predict_.size()[0]):
@@ -60,7 +60,6 @@ def val(packs, model):
 # 开始训练
 def train(train_data, val_data, model, optimizer, Epoch, writer):
     model.train()
-    model.freeze_bn()
 
     total_step = len(train_data)
     all_losses = 0.0
@@ -85,13 +84,13 @@ def train(train_data, val_data, model, optimizer, Epoch, writer):
             gts.append(gt)
 
         # 解码
-        out1, out2 = model(images)  # 第4阶段, 第3阶段, 第2阶段, 第1阶段, 第0阶段
+        out1 = model(images)  # 第4阶段, 第3阶段, 第2阶段, 第1阶段, 第0阶段
 
         if i % 100 == 0:
-            Log_image(out1, out2, gts, writer, i // 100)
+            Log_image(out1, gts, writer, i // 100)
 
         # Loss 计算
-        loss = multi_loss(out1, out2, gts)
+        loss = multi_loss(out1, gts)
         for k in range(args.clip_len):
             all_losses += loss[k].data
 
@@ -110,7 +109,7 @@ def train(train_data, val_data, model, optimizer, Epoch, writer):
 
         # 显示与记录内容
         if i % 10 == 0 or i == total_step:
-            print('{},Epoch:{:02d}/{:02d},Step:{:0.2f}%|{:04d}/{:04d},Loss:[train:{:0.4f}|mae:{:0.4f}|s_val:{:0.4f}],time:{:0.2f}/{:0.2f}min'.
+            print('{},Epoch:{:02d}/{:02d},Step:{:0.2f}%|{:04d}/{:04d},Loss:[train:{:0.4f}|mae:{:0.4f}|s_val:{:0.4f}],time:{:0.2f}/{:0.2f}min\n'.
                   format(datetime.now().strftime('%m/%d/%H:%M'),
                          Epoch, args.total_epoch, (i / total_step) * 100, i,
                          total_step, all_losses / (i * args.clip_len), MAES / (i * args.clip_len), S_measures / (i * args.clip_len),
@@ -135,7 +134,7 @@ def train(train_data, val_data, model, optimizer, Epoch, writer):
             torch.save({'epoch': Epoch, 'state_dict': model.state_dict(), 'best_val_loss': best_val_loss, 'optimizer': optimizer.state_dict()},
                        args.model_path + '/video_best_model.pth.tar')
 
-            print('this is best_model_Epoch: {}'.format(Epoch))
+            print('this is best_model_Epoch: {}\n'.format(Epoch))
 
     # 保存最后一次模
     torch.save({'epoch': Epoch, 'state_dict': model.state_dict(), 'best_val_loss': best_val_loss, 'optimizer': optimizer.state_dict()},
@@ -170,7 +169,7 @@ def start_train(train_dataloader, val_dataloader, model):
         checkpoint = torch.load(path, map_location=torch.device(device))
         model.load_state_dict(checkpoint["state_dict"])
 
-        print('Load pre_train model Done !!! ')
+        print('Load pre_train model Done !!! \n')
 
     path = args.model_path + '/video_last_model.pth.tar'
     if os.path.exists(path):
@@ -183,7 +182,7 @@ def start_train(train_dataloader, val_dataloader, model):
         if "optimizer" in checkpoint:
             optimizer.load_state_dict(checkpoint["optimizer"])
 
-        print('Load video_last_model Done !!! ')
+        print('Load video_last_model Done !!! \n')
 
     for epoch in range(start_epoch, args.total_epoch + 1):
         adjust_lr(optimizer, epoch, args.decay_rate, args.decay_epoch)

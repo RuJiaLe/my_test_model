@@ -338,7 +338,10 @@ def Eval_S_measure(pred, gt):
 
 # ******************************Log******************************
 # Log_image
-def Log_image(out1, out2, gt, writer, step):  # out[阶段][帧]         [帧][阶段]
+def Log_image(out1, gt, writer, step):  # out[阶段][帧]         [帧][阶段]
+
+    out1 = torch.sigmoid(out1)
+    # out2 = torch.sigmoid(out2)
 
     output1_4 = torch.cat(out1[0], dim=0)
     output1_3 = torch.cat(out1[1], dim=0)
@@ -346,19 +349,19 @@ def Log_image(out1, out2, gt, writer, step):  # out[阶段][帧]         [帧][�
     output1_1 = torch.cat(out1[3], dim=0)
     output1_0 = torch.cat(out1[4], dim=0)
 
-    output2_4 = torch.cat(out2[0], dim=0)
-    output2_3 = torch.cat(out2[1], dim=0)
-    output2_2 = torch.cat(out2[2], dim=0)
-    output2_1 = torch.cat(out2[3], dim=0)
-    output2_0 = torch.cat(out2[0], dim=0)
+    # output2_4 = torch.cat(out2[0], dim=0)
+    # output2_3 = torch.cat(out2[1], dim=0)
+    # output2_2 = torch.cat(out2[2], dim=0)
+    # output2_1 = torch.cat(out2[3], dim=0)
+    # output2_0 = torch.cat(out2[4], dim=0)
 
     gts = torch.cat(gt, dim=0)
 
-    writer.add_images(tag='Image/output2_4', img_tensor=output2_4, global_step=step, dataformats='NCHW')
-    writer.add_images(tag='Image/output2_3', img_tensor=output2_3, global_step=step, dataformats='NCHW')
-    writer.add_images(tag='Image/output2_2', img_tensor=output2_2, global_step=step, dataformats='NCHW')
-    writer.add_images(tag='Image/output2_1', img_tensor=output2_1, global_step=step, dataformats='NCHW')
-    writer.add_images(tag='Image/output2_0', img_tensor=output2_0, global_step=step, dataformats='NCHW')
+    # writer.add_images(tag='Image/output2_4', img_tensor=output2_4, global_step=step, dataformats='NCHW')
+    # writer.add_images(tag='Image/output2_3', img_tensor=output2_3, global_step=step, dataformats='NCHW')
+    # writer.add_images(tag='Image/output2_2', img_tensor=output2_2, global_step=step, dataformats='NCHW')
+    # writer.add_images(tag='Image/output2_1', img_tensor=output2_1, global_step=step, dataformats='NCHW')
+    # writer.add_images(tag='Image/output2_0', img_tensor=output2_0, global_step=step, dataformats='NCHW')
 
     writer.add_images(tag='Image/output1_4', img_tensor=output1_4, global_step=step, dataformats='NCHW')
     writer.add_images(tag='Image/output1_3', img_tensor=output1_3, global_step=step, dataformats='NCHW')

@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
-from .model_utils import Video_Decoder_Part
-from .model_utils import CBS, CBR, refine_module
-from .ConvGRU import ConvGRUCell
+from .model_utils import Decoder_Part
+from .model_utils import CLG, refine_module, frame_similarly
 from .triplet_attention import TripletAttention
-from .ssa import shunted_s
+from .ssa import shunted_s, shunted_b
 
 
 class Encoder_Model(nn.Module):
+
     def __init__(self, pretrained=True):
         super(Encoder_Model, self).__init__()
 
@@ -42,63 +42,67 @@ class Encoder_Model(nn.Module):
 
 
 class Model(nn.Module):
+
     def __init__(self, pretrained=True):
         super(Model, self).__init__()
-        if pretrained:
-            for key in self.state_dict():
-                if 'resnet' not in key:
-                    self.init_layer(key)
+
         # --------------------编码阶段--------------------
+
         self.encoder = Encoder_Model(pretrained=pretrained)
 
         # --------------------第四解码阶段--------------------
 
-        self.decoder4 = Video_Decoder_Part(512, 256)
+        self.frame_similarly_4 = frame_similarly()
+        self.CLG4 = CLG(512, 512)
+        self.decoder4 = Decoder_Part(512, 256)
 
         # --------------------第三解码阶段--------------------
 
-        self.CBR3 = CBR(256, 256)
-
-        self.decoder3 = Video_Decoder_Part(256, 128)
+        self.frame_similarly_3 = frame_similarly()
+        self.CLG3 = CLG(256, 256)
+        self.decoder3 = Decoder_Part(256, 128)
 
         # --------------------第二解码阶段--------------------
-        self.CBR2 = CBR(128, 128)
 
-        self.decoder2 = Video_Decoder_Part(128, 64)
-
-        # self.ConvGRU2 = ConvGRUCell(64, 64)
+        self.frame_similarly_2 = frame_similarly()
+        self.CLG2 = CLG(128, 128)
+        self.decoder2 = Decoder_Part(128, 64)
 
         # --------------------第一解码阶段--------------------
-        self.CBR1 = CBR(64, 64)
 
-        self.decoder1 = Video_Decoder_Part(64, 32)
-
-        # self.ConvGRU1 = ConvGRUCell(32, 32)
+        self.frame_similarly_1 = frame_similarly()
+        self.CLG1 = CLG(64, 64)
+        self.decoder1 = Decoder_Part(64, 32)
 
         # --------------------第0解码阶段--------------------
-        self.CBR0 = CBR(32, 32)
-        self.decoder0 = Video_Decoder_Part(32, 32)
+
+        self.frame_similarly_0 = frame_similarly()
+        self.CLG0 = CLG(32, 32)
+        self.decoder0 = Decoder_Part(32, 32)
 
         # --------------------refine--------------------
-        self.refine = refine_module()
-        # self.ConvGRU0 = ConvGRUCell(1, 1)
+
+        # self.refine = refine_module()
+
         # --------------------output阶段--------------------
-        self.CBS4 = CBS(256, 1)
-        self.CBS3 = CBS(128, 1)
-        self.CBS2 = CBS(64, 1)
-        self.CBS1 = CBS(32, 1)
-        self.CBS0 = CBS(32, 1)
+
+        self.out_CLG4 = CLG(256, 1)
+        self.out_CLG3 = CLG(128, 1)
+        self.out_CLG2 = CLG(64, 1)
+        self.out_CLG1 = CLG(32, 1)
+        self.out_CLG0 = CLG(32, 1)
 
         # --------------------上采样阶段--------------------
+
         self.Up_sample_32 = nn.Upsample(scale_factor=32, mode='bilinear')
         self.Up_sample_16 = nn.Upsample(scale_factor=16, mode='bilinear')
         self.Up_sample_8 = nn.Upsample(scale_factor=8, mode='bilinear')
         self.Up_sample_4 = nn.Upsample(scale_factor=4, mode='bilinear')
         self.Up_sample_2 = nn.Upsample(scale_factor=2, mode='bilinear')
-        self.Up_sample_1_2 = nn.Upsample(scale_factor=0.5, mode='bilinear')
 
-    def forward(self, frames):  # (1, 2048, 8, 8)  [block1, block2, block3, block4]
+    def forward(self, frames):
         # --------------------编码阶段--------------------
+
         blocks_1 = []
         blocks_2 = []
         for i in range(len(frames)):
@@ -107,113 +111,126 @@ class Model(nn.Module):
             blocks_2.append(block_2)
 
         # --------------------第四解码阶段--------------------
+        in_x4 = []
+        for i in range(len(frames)):
+            t = blocks_1[i][3] + blocks_2[i][3]
+            in_x4.append(t)
+
+        in_x4 = self.frame_similarly_4(in_x4)
+
         x4 = []
         for i in range(len(frames)):
-            x = self.decoder4(blocks_1[i][3])
+            x = self.decoder4(self.CLG4(in_x4[i]))
             x4.append(x)
 
         out4 = x4
 
         # --------------------第三解码阶段--------------------
-        x3 = []
-
+        in_x3 = []
         for i in range(len(frames)):
-            x = out4[i] + blocks_1[i][2]
-            x = self.CBR3(x)
-            x = self.decoder3(x)
+            t = out4[i] + blocks_1[i][2] + blocks_2[i][2]
+            in_x3.append(t)
+        
+        in_x3 = self.frame_similarly_3(in_x3)
+
+        x3 = []
+        for i in range(len(frames)):
+            x = self.decoder3(self.CLG3(in_x3[i]))
             x3.append(x)
 
         out3 = x3
 
         # --------------------第二解码阶段--------------------
-        x2 = []
-
+        in_x2 = []
         for i in range(len(frames)):
-            x = out3[i] + blocks_1[i][1]
-            x = self.CBR2(x)
-            x = self.decoder2(x)
+            t = out3[i] + blocks_1[i][1] + blocks_2[i][1]
+            in_x2.append(t)
+        
+        in_x2 = self.frame_similarly_2(in_x2)
+
+        x2 = []
+        for i in range(len(frames)):
+            x = self.decoder2(self.CLG2(in_x2[i]))
             x2.append(x)
 
-        # out2 = [None]
-        # for i in range(len(frames)):
-        #     out = self.ConvGRU2(x2[i], out2[i])
-        #     out2.append(out)
-
-        # out2 = out2[1:]
         out2 = x2
 
         # --------------------第一解码阶段--------------------
-        x1 = []
-        sum_1 = out2[-1]
-        for i in range(len(frames) - 1):
-            sum_1 += out2[i]
-
+        in_x1 = []
         for i in range(len(frames)):
-            x = out2[i] + blocks_1[i][0]
-            x = self.CBR1(x + sum_1)
-            x = self.decoder1(x)
+            t = out2[i] + blocks_1[i][0] + blocks_2[i][0]
+            in_x1.append(t)
+        
+        in_x1 = self.frame_similarly_1(in_x1)
+
+        x1 = []
+        for i in range(len(frames)):
+            x = self.decoder1(self.CLG1(in_x1[i]))
             x1.append(x)
 
-        # out1 = [None]
-        # for i in range(len(frames)):
-        #     out = self.ConvGRU1(x1[i], out1[i])
-        #     out1.append(out)
-
-        # out1 = out1[1:]
         out1 = x1
 
-        # --------------------第一解码阶段--------------------
-        x0 = []
-        sum_0 = out1[-1]
-        for i in range(len(frames) - 1):
-            sum_0 += out1[i]
+        # --------------------第0解码阶段--------------------
 
+        in_x0 = []
         for i in range(len(frames)):
-            x = out1[i]
-            x = self.CBR0(x + sum_0)
-            x = self.decoder0(x)
+            t = out1[i]
+            in_x0.append(t)
+
+        in_x0 = self.frame_similarly_0(in_x0)
+  
+        x0 = []
+        for i in range(len(frames)):
+            x = self.decoder0(self.CLG0(in_x0[i]))
             x0.append(x)
-        
+
         out0 = x0
 
         # --------------------输出阶段--------------------
+
         output4 = []
         for i in range(len(frames)):
-            out = self.Up_sample_16(self.CBS4(out4[i]))
+            out = self.Up_sample_16(self.out_CLG4(out4[i]))
             output4.append(out)
 
         output3 = []
         for i in range(len(frames)):
-            out = self.Up_sample_8(self.CBS3(out3[i]))
+            out = self.Up_sample_8(self.out_CLG3(out3[i]))
             output3.append(out)
 
         output2 = []
         for i in range(len(frames)):
-            out = self.Up_sample_4(self.CBS2(out2[i]))
+            out = self.Up_sample_4(self.out_CLG2(out2[i]))
             output2.append(out)
 
         output1 = []
         for i in range(len(frames)):
-            out = self.Up_sample_2(self.CBS1(out1[i]))
+            out = self.Up_sample_2(self.out_CLG1(out1[i]))
             output1.append(out)
-        
+
         output0 = []
         for i in range(len(frames)):
-            out = self.CBS0(out0[i])
+            out = self.out_CLG0(out0[i])
             output0.append(out)
 
-        # --------------------refine--------------------
-        refine = []
-        for i in range(len(frames)):
-            refine.append(self.refine(output0[i] + output1[i] + output2[i] + output3[i] + output4[i], blocks_2[i]))
+        # # --------------------refine--------------------
 
-        refine_output = []
-        for i in range(len(refine[0])):  # 解码阶段
-            stage = []
-            for j in range(len(frames)):  # 帧数
-                x = refine[j][i]
-                stage.append(x)
+        # refine = []
+        # for i in range(len(frames)):
+        #     refine.append(
+        #         self.refine(
+        #             output0[i] + output1[i] + output2[i] + output3[i] +
+        #             output4[i], blocks_2[i]))
 
-            refine_output.append(stage)
+        # refine_output = []
+        # for i in range(len(refine[0])):  # 解码阶段
+        #     stage = []
+        #     for j in range(len(frames)):  # 帧数
+        #         x = refine[j][i]
+        #         stage.append(x)
 
-        return [output4, output3, output2, output1, output0], refine_output
+        #     refine_output.append(stage)
+
+        # return [output4, output3, output2, output1, output0], refine_output
+        
+        return [output4, output3, output2, output1, output0]

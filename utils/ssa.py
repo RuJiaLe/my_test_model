@@ -413,6 +413,7 @@ def shunted_s(pretrained=False, **kwargs):
     path = './save_models/ckpt_S.pth'
     if os.path.exists(path):
         model.load_state_dict(torch.load(path, map_location=torch.device(device)))
+        print("Load pretrain model done!!!\n")
 
     return model
 
@@ -428,5 +429,5 @@ def shunted_b(pretrained=False, **kwargs):
     path = './save_models/ckpt_B.pth'
     if os.path.exists(path):
         model.load_state_dict(torch.load(path, map_location=torch.device(device)))
-
+        print("Load pretrain model done!!!\n")
     return model
